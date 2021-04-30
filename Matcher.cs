@@ -24,6 +24,9 @@ namespace TradingEngine
                 case Ask ask:
                     HandleAskOrder(ask);
                     break;
+                case GetPrice:
+                    HandleGetPrice();
+                    break;
             }
 
         }
@@ -54,7 +57,6 @@ namespace TradingEngine
                     Reason = reason
                 });
             });
-
         private void HandlerOrder(Order order, Action onSuccess, Action<string> onFailure)
         {
             var validation = ValidateOrder(order);
@@ -74,6 +76,27 @@ namespace TradingEngine
             }
         }
 
+        public  bool Tradable => _orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue;
+        private void HandleGetPrice()
+        {
+            if (Tradable)
+            {
+                Sender.Tell(new GetPriceResult
+                {
+                    Success = true,
+                    Ask = _orderStore.BestAsk,
+                    Bid = _orderStore.BestBid, 
+                });
+            }
+            else
+            {
+                Sender.Tell(new GetPriceResult
+                {
+                   Reason = "Price is not available at the moment"
+                });
+            }
+        }
+
         private bool IsPriceChanging(Order order)
         {
             if (order.IsBid)
@@ -90,7 +113,6 @@ namespace TradingEngine
             Ask = _orderStore.BestAsk,
             Bid = _orderStore.BestBid
         });
-
         private static void NotifyOrderPlaced(Order order) => Notify(new OrderPlaced()
         {
             Order = order

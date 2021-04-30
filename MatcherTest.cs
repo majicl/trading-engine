@@ -145,11 +145,11 @@ namespace TradingEngine
             Assert.Equal(99.98m, priceChanged.Bid);
 
             //arrange
-             var bid2 = NewBid(units: 10, price: 99.99m);
+            var bid2 = NewBid(units: 10, price: 99.99m);
 
             //act
-             _matcher.Tell(bid2);
-             Thread.Sleep(500);
+            _matcher.Tell(bid2);
+            Thread.Sleep(500);
 
             //assert
             Assert.Equal(99.99m, priceChanged.Bid);
@@ -247,20 +247,6 @@ namespace TradingEngine
         }
 
         [Fact]
-        [Description("Publishes an event when a bid order has been settled with a matching ask order, partially or otherwise")]
-        public void Settle_Bid_Order_Should_Publish_Event()
-        {
-            //arrange
-            var bid = NewBid(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(bid);
-
-            //assert
-            ExpectMsg<BidResult>(msg => msg.Success);
-        }
-
-        [Fact]
         [Description("Returns the latest price")]
         public async Task Latest_Price_Returns_ExpectedData()
         {
@@ -278,6 +264,48 @@ namespace TradingEngine
             //assert
             Assert.Equal(110.00m, result.Bid);
             Assert.Equal(100.00m, result.Ask);
+            Assert.True(result.Success);
+            Assert.Empty(result.Reason);
+        }
+
+        [Theory]
+        [InlineData(0, 100.0, 1, 101.0)]
+        [InlineData(1, 100.0, 0, 101.0)]
+        [InlineData(1, 0, 1, 101.0)]
+        [InlineData(1, 100.0, 1, 00.0)]
+        [Description("Doesn't return the latest price")]
+        public async Task Latest_Price_Returns_Null_Values_With_Reason(int bidUnits, decimal bidPrice, int askUnits, decimal askPrice)
+        {
+            //arrange
+            var bid = NewBid(units: bidUnits, price: bidPrice);
+            var ask = NewAsk(units: askUnits, price: askPrice);
+
+            //act
+            _matcher.Tell(bid);
+            _matcher.Tell(ask);
+
+            var message = new GetPrice();
+            var result = await _matcher.Ask<GetPriceResult>(message);
+
+            //assert
+            Assert.Null(result.Bid);
+            Assert.Null(result.Ask);
+            Assert.False(result.Success);
+            Assert.Equal("Price is not available at the moment", result.Reason);
+        }
+
+        [Fact]
+        [Description("Publishes an event when a bid order has been settled with a matching ask order, partially or otherwise")]
+        public void Settle_Bid_Order_Should_Publish_Event()
+        {
+            //arrange
+            var bid = NewBid(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(bid);
+
+            //assert
+            ExpectMsg<BidResult>(msg => msg.Success);
         }
 
         [Fact]
