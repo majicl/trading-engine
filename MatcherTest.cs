@@ -1,7 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Actor.Dsl;
 using Akka.TestKit.Xunit2;
 using Xunit;
 
@@ -90,108 +92,21 @@ namespace TradingEngine
         }
 
         [Fact]
-        [Description("Publishes an event when the best bid price changes")]
-        public void Change_Bid_Price_To_The_Best_Should_Publish_Event()
-        { 
-            //arrange
-            var bid = NewBid(units: 10, price: 99.98m);
-
-            //act
-            _matcher.Tell(bid);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Bid == 99.98m);
-
-            //arrange
-            var bid2 = NewBid(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(bid2);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Bid == 99.99m);
-        }
-
-        [Fact]
-        [Description("Publishes an event when the best bid price changes")]
-        public void Change_Bid_Price_NOT_To_The_Best_Should_NOT_Publish_Event()
-        { //arrange
-            var bid = NewBid(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(bid);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Bid == 99.99m);
-
-            //arrange
-            var bid2 = NewBid(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(bid2);
-
-            //assert
-            ExpectNoMsg();
-        }
-
-        [Fact]
-        [Description("Publishes an event when the best ask price changes")]
-        public void Change_Ask_Price_To_The_Best_Should_Publish_Event()
-        {
-            //arrange
-            var ask = NewAsk(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(ask);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Ask == 99.99m);
-
-            //arrange
-            var ask2 = NewAsk(units: 10, price: 99.98m);
-
-            //act
-            _matcher.Tell(ask2);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Ask == 99.98m);
-        }
-
-        [Fact]
-        [Description("Publishes an event when the best ask price changes")]
-        public void Change_Ask_Price_NOT_To_The_Best_Should_NOT_Publish_Event()
-        {
-            //arrange
-            var ask = NewAsk(units: 10, price: 99.99m);
-
-            //act
-            _matcher.Tell(ask);
-
-            //assert
-            ExpectMsg<PriceChanged>(msg => msg.Ask == 99.99m);
-
-            //arrange
-            var ask2 = NewAsk(units: 10, price: 99.98m);
-
-            //act
-            _matcher.Tell(ask2);
-
-            //assert
-            ExpectNoMsg();
-        }
-
-        [Fact]
         [Description("Publishes an event when an order has been accepted (not necessarily matched)")]
         public void Accept_Ask_Orders_Should_Publish_Event()
         {
             //arrange
+            OrderPlaced orderPlaced = null;
+            SetupSubscribe<OrderPlaced>((op) => orderPlaced = op);
             var ask = NewAsk(units: 10, price: 99.99m);
 
             //act
             _matcher.Tell(ask);
+            Thread.Sleep(500);
 
             //assert
-            ExpectMsg<OrderPlaced>(msg => msg.Order.OrderId == ask.Order.OrderId);
+            Assert.NotNull(orderPlaced);
+            Assert.Equal(ask.Order, orderPlaced.Order);
         }
 
         [Fact]
@@ -199,13 +114,136 @@ namespace TradingEngine
         public void Accept_Bid_Orders_Should_Publish_Event()
         {
             //arrange
+            OrderPlaced orderPlaced = null;
+            SetupSubscribe<OrderPlaced>((op) => orderPlaced = op);
             var bid = NewBid(units: 10, price: 99.99m);
 
             //act
             _matcher.Tell(bid);
+            Thread.Sleep(500);
 
             //assert
-            ExpectMsg<OrderPlaced>(msg => msg.Order.OrderId == bid.Order.OrderId);
+            Assert.NotNull(orderPlaced);
+            Assert.Equal(bid.Order, orderPlaced.Order);
+        }
+
+        [Fact]
+        [Description("Publishes an event when the best bid price changes")]
+        public void Change_Bid_Price_To_The_Best_Should_Publish_Event()
+        {
+            //arrange
+            var bid = NewBid(units: 10, price: 99.98m);
+            PriceChanged priceChanged = null;
+            SetupSubscribe<PriceChanged>((pc) => priceChanged = pc);
+
+            //act
+            _matcher.Tell(bid);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.NotNull(priceChanged);
+            Assert.Equal(99.98m, priceChanged.Bid);
+
+            //arrange
+             var bid2 = NewBid(units: 10, price: 99.99m);
+
+            //act
+             _matcher.Tell(bid2);
+             Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.99m, priceChanged.Bid);
+        }
+
+        [Theory]
+        [InlineData(99.99)] // max is 99.99
+        [InlineData(99.98)]
+        [InlineData(0)]
+        [InlineData(-1)]
+        [Description("Publishes an event when the best bid price changes")]
+        public void Change_Bid_Price_NOT_To_The_Best_Should_NOT_Publish_Event(decimal price)
+        {
+            //arrange
+            PriceChanged priceChanged = null;
+            SetupSubscribe<PriceChanged>((pc) => priceChanged = pc);
+            var bid = NewBid(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(bid);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.99m, priceChanged.Bid);
+            //arrange
+            var bid2 = NewBid(units: 10, price: price);
+
+            //act
+            _matcher.Tell(bid2);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.99m, priceChanged.Bid);
+        }
+
+        [Fact]
+        [Description("Publishes an event when the best ask price changes")]
+        public void Change_Ask_Price_To_The_Best_Should_Publish_Event()
+        {
+            //arrange
+            PriceChanged priceChanged = null;
+            SetupSubscribe<PriceChanged>((pc) => priceChanged = pc);
+            var ask = NewAsk(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(ask);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.NotNull(priceChanged);
+            Assert.Equal(99.99m, priceChanged.Ask);
+
+            //arrange
+            var ask2 = NewAsk(units: 10, price: 99.98m);
+
+            //act
+            _matcher.Tell(ask2);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.98m, priceChanged.Ask);
+        }
+
+
+        [Theory]
+        [InlineData(99.99)] // max is 99.99
+        [InlineData(100.00)]
+        [InlineData(0)]
+        [InlineData(-1)]
+        [Description("Publishes an event when the best ask price changes")]
+        public void Change_Ask_Price_NOT_To_The_Best_Should_NOT_Publish_Event(decimal price)
+        {
+            //arrange
+            PriceChanged priceChanged = null;
+            SetupSubscribe<PriceChanged>((pc) => priceChanged = pc);
+            var ask = NewAsk(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(ask);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.NotNull(priceChanged);
+            Assert.Equal(99.99m, priceChanged.Ask);
+
+            //arrange
+            var ask2 = NewAsk(units: 10, price: price);
+
+            //act
+            _matcher.Tell(ask2);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.99m, priceChanged.Ask);
         }
 
         [Fact]
@@ -259,5 +297,13 @@ namespace TradingEngine
             //assert
             Assert.NotEmpty(result.Orders);
         }
+
+        private void SetupSubscribe<T>(Action<T> onReceived)
+        {
+            var handler = new Action<T, object>((evt, ctx) => onReceived?.Invoke(evt));
+            var actorReference = Sys.ActorOf(cfg => cfg.Receive(handler));
+            Sys.EventStream.Subscribe(actorReference, typeof(T));
+        }
+
     }
 }

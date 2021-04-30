@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Specialized;
 using Akka.Actor;
-using System.ComponentModel.DataAnnotations;
 
 namespace TradingEngine
 {
@@ -9,6 +7,7 @@ namespace TradingEngine
     {
         private readonly string _stockId;
         private readonly OrderStore _orderStore = new OrderStore();
+        private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
         public Matcher(string stockId)
         {
@@ -68,6 +67,7 @@ namespace TradingEngine
             var isPriceChanging = IsPriceChanging(order);
             _orderStore.Add(order);
             onSuccess?.Invoke();
+            NotifyOrderPlaced(order);
             if (isPriceChanging)
             {
                 NotifyPriceChanged();
@@ -84,7 +84,17 @@ namespace TradingEngine
             return _orderStore.BestAsk != order.Price;
         }
 
-        private void NotifyPriceChanged() {}
+        private void NotifyPriceChanged() => Notify(new PriceChanged
+        {
+            StockId = _stockId,
+            Ask = _orderStore.BestAsk,
+            Bid = _orderStore.BestBid
+        });
+
+        private static void NotifyOrderPlaced(Order order) => Notify(new OrderPlaced()
+        {
+            Order = order
+        });
 
         private static OrderValidationResult ValidateOrder(Order order)
         {
