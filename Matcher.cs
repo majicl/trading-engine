@@ -6,6 +6,7 @@ namespace TradingEngine
     public class Matcher : UntypedActor
     {
         private readonly string _stockId;
+        private bool _halted = true;
         private readonly OrderStore _orderStore = new OrderStore();
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
@@ -21,14 +22,23 @@ namespace TradingEngine
                 case Bid bid:
                     HandleBidOrder(bid);
                     break;
+
                 case Ask ask:
                     HandleAskOrder(ask);
                     break;
+
                 case GetPrice:
                     HandleGetPrice();
                     break;
-            }
 
+                case Start:
+                    TurnOn();
+                    break;
+
+                case Halt:
+                    TurnOff();
+                    break;
+            }
         }
 
         private void HandleAskOrder(Ask ask) => HandlerOrder(ask.Order, () =>
@@ -59,6 +69,11 @@ namespace TradingEngine
             });
         private void HandlerOrder(Order order, Action onSuccess, Action<string> onFailure)
         {
+            if (_halted)
+            {
+                return;
+            }
+
             var validation = ValidateOrder(order);
             if (!validation.IsValid)
             {
@@ -76,7 +91,27 @@ namespace TradingEngine
             }
         }
 
-        public  bool Tradable => _orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue;
+        private void TurnOn()
+        {
+            Sender.Tell(new StartResult()
+            {
+                Success = true,
+                Reason = "The engine has been started"
+            });
+            _halted = false;
+        }
+
+        private void TurnOff()
+        {
+            Sender.Tell(new HaltResult()
+            {
+                Success = true,
+                Reason = "The engine has been halted"
+            });
+            _halted = true;
+        }
+
+        public bool Tradable => _orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue;
         private void HandleGetPrice()
         {
             if (Tradable)
@@ -85,14 +120,14 @@ namespace TradingEngine
                 {
                     Success = true,
                     Ask = _orderStore.BestAsk,
-                    Bid = _orderStore.BestBid, 
+                    Bid = _orderStore.BestBid,
                 });
             }
             else
             {
                 Sender.Tell(new GetPriceResult
                 {
-                   Reason = "Price is not available at the moment"
+                    Reason = "Price is not available at the moment"
                 });
             }
         }

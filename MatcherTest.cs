@@ -109,6 +109,50 @@ namespace TradingEngine
             Assert.Equal(ask.Order, orderPlaced.Order);
         }
 
+
+        [Fact]
+        [Description("Halted engine does NOT accept any order")]
+        public void Valid_Ask_Order_Should_NOT_Place_If_Halted()
+        {
+            //arrange
+            _matcher.Tell(new Halt());
+            var ask = NewAsk(units: 50, price: 99.00m);
+
+            //act
+            _matcher.Tell(ask);
+
+            //assert
+            ExpectMsg<HaltResult>();
+            ExpectNoMsg();
+        }
+
+        [Fact]
+        [Description("Halted engine accepts orders after Starting the engine")]
+        public void Valid_Orders_Should_Place_After_Starting_Engine()
+        {
+            //arrange
+            _matcher.Tell(new Halt());
+            var ask = NewAsk(units: 50, price: 99.00m);
+
+            //act
+            _matcher.Tell(ask);
+
+            //assert
+            ExpectMsg<HaltResult>();
+            ExpectNoMsg();
+
+            //arrange
+            _matcher.Tell(new Start());
+            var ask2 = NewAsk(units: 50, price: 99.00m);
+
+            //act
+            _matcher.Tell(ask2);
+
+            //assert
+            ExpectMsg<StartResult>();
+            ExpectMsg<AskResult>(r => Assert.True(r.Success, r.Reason));
+        }
+
         [Fact]
         [Description("Publishes an event when an order has been accepted (not necessarily matched)")]
         public void Accept_Bid_Orders_Should_Publish_Event()
