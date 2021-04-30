@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Akka.Actor;
 
 namespace TradingEngine
@@ -6,8 +8,9 @@ namespace TradingEngine
     public class Matcher : UntypedActor
     {
         private readonly string _stockId;
-        private bool _halted = true;
+        private bool _halted = false;
         private readonly OrderStore _orderStore = new OrderStore();
+        private readonly ICollection<TradeSettled> _tradeSettled = new List<TradeSettled>();
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
         public Matcher(string stockId)
@@ -37,6 +40,10 @@ namespace TradingEngine
 
                 case Halt:
                     TurnOff();
+                    break;
+
+                case GetTrades:
+                    HandleGetTrades();
                     break;
             }
         }
@@ -109,6 +116,19 @@ namespace TradingEngine
                 Reason = "The engine has been halted"
             });
             _halted = true;
+        }
+
+        private void HandleGetTrades()
+        {
+            Sender.Tell(new GetTradesResult()
+            {
+                Success = true,
+                Orders = _tradeSettled.SelectMany(ts => new List<Order>()
+                {
+                    _orderStore.Single(_=>_.OrderId == ts.AskOrderId),
+                    _orderStore.Single(_=>_.OrderId == ts.BidOrderId),
+                }).ToList()
+            });
         }
 
         public bool Tradable => _orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue;

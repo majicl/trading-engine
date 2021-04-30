@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -309,7 +310,7 @@ namespace TradingEngine
             Assert.Equal(110.00m, result.Bid);
             Assert.Equal(100.00m, result.Ask);
             Assert.True(result.Success);
-            Assert.Empty(result.Reason);
+            Assert.Null(result.Reason);
         }
 
         [Theory]
@@ -343,13 +344,22 @@ namespace TradingEngine
         public void Settle_Bid_Order_Should_Publish_Event()
         {
             //arrange
+            TradeSettled tradeSettled = null;
+            SetupSubscribe<TradeSettled>((ts) => tradeSettled = ts);
             var bid = NewBid(units: 10, price: 99.99m);
+            var ask = NewAsk(units: 10, price: 99.99m);
 
             //act
             _matcher.Tell(bid);
+            _matcher.Tell(ask);
+            Thread.Sleep(500);
 
             //assert
-            ExpectMsg<BidResult>(msg => msg.Success);
+            Assert.NotNull(tradeSettled);
+            Assert.Equal(99.99m, tradeSettled.Price);
+            Assert.Equal(10, tradeSettled.Units);
+            Assert.Equal(ask.Order.OrderId, tradeSettled.AskOrderId);
+            Assert.Equal(bid.Order.OrderId, tradeSettled.BidOrderId);
         }
 
         [Fact]
@@ -358,7 +368,7 @@ namespace TradingEngine
         {
             //arrange
             var bid = NewBid(units: 10, price: 110.00m);
-            var ask = NewAsk(units: 10, price: 100.00m);
+            var ask = NewAsk(units: 10, price: 110.00m);
 
             //act
             _matcher.Tell(bid);
@@ -368,6 +378,8 @@ namespace TradingEngine
 
             //assert
             Assert.NotEmpty(result.Orders);
+            Assert.Equal(ask.Order, result.Orders.First());
+            Assert.Equal(bid.Order, result.Orders.Last());
         }
 
         private void SetupSubscribe<T>(Action<T> onReceived)
@@ -376,6 +388,5 @@ namespace TradingEngine
             var actorReference = Sys.ActorOf(cfg => cfg.Receive(handler));
             Sys.EventStream.Subscribe(actorReference, typeof(T));
         }
-
     }
 }
