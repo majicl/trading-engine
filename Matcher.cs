@@ -36,12 +36,12 @@ namespace TradingEngine
                     HandleGetPrice();
                     break;
 
-                case Start:
-                    TurnOn();
+                case Start start:
+                    TurnOn(start);
                     break;
 
-                case Halt:
-                    TurnOff();
+                case Halt halt:
+                    TurnOff(halt);
                     break;
 
                 case GetTrades:
@@ -152,23 +152,43 @@ namespace TradingEngine
             }
         }
 
-        private void TurnOn()
+        private void TurnOn(Start start)
         {
-            Sender.Tell(new StartResult()
+            if (start.StockId == _stockId)
             {
-                Success = true,
-                Reason = "The engine has been started"
-            });
-            _halted = false;
+                Sender.Tell(new StartResult()
+                {
+                    Success = true
+                });
+                _halted = false;
+            }
+            else
+            {
+                Sender.Tell(new StartResult()
+                {
+                    Success = false,
+                    Reason = "StockId doesn't match"
+                });
+            }
         }
-        private void TurnOff()
+        private void TurnOff(Halt halt)
         {
-            Sender.Tell(new HaltResult()
+            if (halt.StockId == _stockId)
             {
-                Success = true,
-                Reason = "The engine has been halted"
-            });
-            _halted = true;
+                Sender.Tell(new HaltResult()
+                {
+                    Success = true
+                });
+                _halted = true;
+            }
+            else
+            {
+                Sender.Tell(new HaltResult()
+                {
+                    Success = false,
+                    Reason = "StockId doesn't match"
+                });
+            }
         }
 
         private void HandleGetTrades()

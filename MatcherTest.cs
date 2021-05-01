@@ -110,20 +110,43 @@ namespace TradingEngine
             Assert.Equal(ask.Order, orderPlaced.Order);
         }
 
+        [Fact]
+        [Description("The engine is not halted with wrong stockId")]
+        public void Wrong_StockId_Does_NOT_Make_Engine_Halted()
+        {
+            //act
+            _matcher.Tell(new Halt() { StockId = "WrongOne" });
+
+            //assert
+            var haltResult = ExpectMsg<HaltResult>(r => Assert.False(r.Success, r.Reason));
+            Assert.Equal("StockId doesn't match", haltResult.Reason);
+        }
+
+        [Fact]
+        [Description("The engine is not started with wrong stockId")]
+        public void Wrong_StockId_Does_NOT_Make_Engine_Started()
+        {
+            //act
+            _matcher.Tell(new Start() { StockId = "WrongOne" });
+
+            //assert
+            var haltResult = ExpectMsg<StartResult>(r => Assert.False(r.Success, r.Reason));
+            Assert.Equal("StockId doesn't match", haltResult.Reason);
+        }
 
         [Fact]
         [Description("Halted engine does NOT accept any order")]
         public void Valid_Ask_Order_Should_NOT_Place_If_Halted()
         {
             //arrange
-            _matcher.Tell(new Halt());
+            _matcher.Tell(new Halt() { StockId = StockId });
             var ask = NewAsk(units: 50, price: 99.00m);
 
             //act
             _matcher.Tell(ask);
 
             //assert
-            ExpectMsg<HaltResult>();
+            ExpectMsg<HaltResult>(r => Assert.True(r.Success, r.Reason));
             ExpectNoMsg();
         }
 
@@ -132,7 +155,7 @@ namespace TradingEngine
         public void Valid_Orders_Should_Place_After_Starting_Engine()
         {
             //arrange
-            _matcher.Tell(new Halt());
+            _matcher.Tell(new Halt() { StockId = StockId });
             var ask = NewAsk(units: 50, price: 99.00m);
 
             //act
@@ -143,14 +166,14 @@ namespace TradingEngine
             ExpectNoMsg();
 
             //arrange
-            _matcher.Tell(new Start());
+            _matcher.Tell(new Start() { StockId = StockId });
             var ask2 = NewAsk(units: 50, price: 99.00m);
 
             //act
             _matcher.Tell(ask2);
 
             //assert
-            ExpectMsg<StartResult>();
+            ExpectMsg<StartResult>(r => Assert.True(r.Success, r.Reason));
             ExpectMsg<AskResult>(r => Assert.True(r.Success, r.Reason));
         }
 
