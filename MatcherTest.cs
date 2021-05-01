@@ -430,16 +430,25 @@ namespace TradingEngine
             //arrange
             var ask = NewAsk(units: 10, price: 99.99m);
             var bid = NewBid(units: 4, price: 99.99m);
+            var bid2 = NewBid(units: 3, price: 99.99m);
 
             //act
             _matcher.Tell(ask);
             _matcher.Tell(bid);
+            _matcher.Tell(bid2);
             var message = new GetTrades() { StockId = StockId };
             var result = await _matcher.Ask<GetTradesResult>(message);
 
             //assert
-            Assert.Equal(2, result.Orders.Count);
+            Assert.Equal(4, result.Orders.Count);
             Assert.Equal(10, ask.Order.Units);
+            Assert.Equal(4, bid.Order.Units);
+            Assert.Equal(3, bid2.Order.Units);
+
+            Assert.Equal(10, result.Orders.First().Units);
+            Assert.Equal(4, result.Orders[1].Units);
+            Assert.Equal(10, result.Orders[2].Units);
+            Assert.Equal(3, result.Orders.Last().Units);
         }
 
         [Fact]

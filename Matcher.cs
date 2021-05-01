@@ -97,7 +97,8 @@ namespace TradingEngine
             }
 
             var isPriceChanging = IsPriceChanging(order);
-            _orderStore.Add(order);
+            var tradingOrder = TradingOrder.New(order);
+            _orderStore.Add(tradingOrder);
             onSuccess?.Invoke();
             NotifyOrderPlaced(order);
             if (isPriceChanging)
@@ -105,56 +106,60 @@ namespace TradingEngine
                 NotifyPriceChanged();
             }
 
-            ResolveMatching(order);
+            ResolveMatching(tradingOrder);
         }
 
-        private void ResolveMatching(Order order)
+        private void ResolveMatching(TradingOrder tradingOrder)
         {
-            if (order.IsBid)
+            if (tradingOrder.IsBid)
             {
-                ResolveBidMatching(order);
+                ResolveBidMatching(tradingOrder);
             }
             else
             {
-                ResolveAskMatching(order);
+                ResolveAskMatching(tradingOrder);
             }
         }
-        private void ResolveBidMatching(Order order)
+        private void ResolveBidMatching(TradingOrder tradingOrder)
         {
-            var matchingAsks = _orderStore.Asks.Where(a => a.Price <= order.Price);
+            var matchingAsks = _orderStore.Asks.Where(a => a.Price <= tradingOrder.Price);
             foreach (var matchingAsk in matchingAsks)
             {
-                if (order.Units == 0)
+                if (tradingOrder.SharedUnits == 0)
                 {
                     break;
                 }
-                var shareToTrade = Math.Min(order.Units, matchingAsk.Units);
-                matchingAsk.Units -= shareToTrade;
-                order.Units -= shareToTrade;
+                var shareToTrade = Math.Min(tradingOrder.SharedUnits, matchingAsk.SharedUnits);
+                matchingAsk.SharedUnits -= shareToTrade;
+                tradingOrder.SharedUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
-                    Price = order.Price,
+                    Price = tradingOrder.Price,
                     Units = shareToTrade,
                     AskOrderId = matchingAsk.OrderId,
                     StockId = _stockId,
-                    BidOrderId = order.OrderId
+                    BidOrderId = tradingOrder.OrderId
                 };
                 _tradeSettled.Add(trade);
             }
         }
-        private void ResolveAskMatching(Order order)
+        private void ResolveAskMatching(TradingOrder tradingOrder)
         {
-            var matchingBids = _orderStore.Bids.Where(a => a.Price >= order.Price);
+            var matchingBids = _orderStore.Bids.Where(a => a.Price >= tradingOrder.Price);
             foreach (var matchingBid in matchingBids)
             {
-                var shareToTrade = Math.Min(order.Units, matchingBid.Units);
-                matchingBid.Units -= shareToTrade;
-                order.Units -= shareToTrade;
+                if (tradingOrder.SharedUnits == 0)
+                {
+                    break;
+                }
+                var shareToTrade = Math.Min(tradingOrder.SharedUnits, matchingBid.SharedUnits);
+                matchingBid.SharedUnits -= shareToTrade;
+                tradingOrder.SharedUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
-                    Price = order.Price,
+                    Price = tradingOrder.Price,
                     Units = shareToTrade,
-                    AskOrderId = order.OrderId,
+                    AskOrderId = tradingOrder.OrderId,
                     StockId = _stockId,
                     BidOrderId = matchingBid.OrderId
                 };
@@ -217,8 +222,8 @@ namespace TradingEngine
                 Success = true,
                 Orders = _tradeSettled.SelectMany(ts => new List<Order>()
                 {
-                    _orderStore.Single(_=>_.OrderId == ts.AskOrderId),
-                    _orderStore.Single(_=>_.OrderId == ts.BidOrderId),
+                    _orderStore.Single(_=>_.OrderId == ts.AskOrderId).Order,
+                    _orderStore.Single(_=>_.OrderId == ts.BidOrderId).Order,
                 }).ToList()
             });
         }
