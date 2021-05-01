@@ -402,6 +402,28 @@ namespace TradingEngine
         }
 
         [Fact]
+        [Description("Does NOT add trades when order units get zero")]
+        public async Task Settle_Bid_Order_Should_NOT_Add_Trade()
+        {
+            //arrange
+            var ask = NewAsk(units: 10, price: 99.99m);
+            var ask2 = NewAsk(units: 10, price: 99.99m);
+            var bid = NewBid(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(ask);
+            _matcher.Tell(ask2);
+            _matcher.Tell(bid);
+            var message = new GetTrades() { StockId = StockId };
+            var result = await _matcher.Ask<GetTradesResult>(message);
+
+            //assert
+            Assert.Equal(2, result.Orders.Count);
+            Assert.Equal(ask.Order, result.Orders.First());
+            Assert.Equal(bid.Order, result.Orders.Last());
+        }
+
+        [Fact]
         [Description("Returns the set of settled orders (some orders may appear multiple times if they are filled by multiple orders)")]
         public async Task Set_Of_Settled_Orders_Returns_ExpectedData()
         {
