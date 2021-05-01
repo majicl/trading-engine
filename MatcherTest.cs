@@ -298,7 +298,6 @@ namespace TradingEngine
             Assert.Equal(99.98m, priceChanged.Ask);
         }
 
-
         [Theory]
         [InlineData(99.99)] // max is 99.99
         [InlineData(100.00)]
@@ -413,13 +412,32 @@ namespace TradingEngine
             //act
             _matcher.Tell(bid);
             _matcher.Tell(ask);
-            var message = new GetTrades();
+            var message = new GetTrades() { StockId = StockId };
             var result = await _matcher.Ask<GetTradesResult>(message);
 
             //assert
             Assert.NotEmpty(result.Orders);
             Assert.Equal(ask.Order, result.Orders.First());
             Assert.Equal(bid.Order, result.Orders.Last());
+        }
+
+        [Fact]
+        [Description("Doesn't return the set of settled orders with wrong stockId")]
+        public async Task Set_Of_Settled_Orders_Does_NOT_Return_ExpectedData()
+        {
+            //arrange
+            var bid = NewBid(units: 10, price: 110.00m);
+            var ask = NewAsk(units: 10, price: 110.00m);
+
+            //act
+            _matcher.Tell(bid);
+            _matcher.Tell(ask);
+            var message = new GetTrades() { StockId = "WrongOne" };
+            var result = await _matcher.Ask<GetTradesResult>(message);
+
+            //assert
+            Assert.Null(result.Orders);
+            Assert.Equal("StockId doesn't match", result.Reason);
         }
 
         private void SetupSubscribe<T>(Action<T> onReceived)

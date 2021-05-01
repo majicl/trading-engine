@@ -44,8 +44,8 @@ namespace TradingEngine
                     TurnOff(halt);
                     break;
 
-                case GetTrades:
-                    HandleGetTrades();
+                case GetTrades getTrades:
+                    HandleGetTrades(getTrades);
                     break;
             }
         }
@@ -197,8 +197,17 @@ namespace TradingEngine
             }
         }
 
-        private void HandleGetTrades()
+        private void HandleGetTrades(GetTrades query)
         {
+            if (query.StockId != _stockId)
+            {
+                Sender.Tell(new GetTradesResult
+                {
+                    Reason = "StockId doesn't match"
+                });
+                return;
+            }
+
             Sender.Tell(new GetTradesResult()
             {
                 Success = true,
