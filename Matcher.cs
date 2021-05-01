@@ -78,17 +78,6 @@ namespace TradingEngine
             });
         private void HandlerOrder(Order order, Action onSuccess, Action<string> onFailure)
         {
-            if (order.StockId != _stockId)
-            {
-                onFailure?.Invoke("StockId doesn't match");
-                return;
-            }
-            if (_halted)
-            {
-                onFailure?.Invoke($"The Engine is halted for Stock: {_stockId}");
-                return;
-            }
-
             var validation = ValidateOrder(order);
             if (!validation.IsValid)
             {
@@ -96,17 +85,25 @@ namespace TradingEngine
                 return;
             }
 
-            var isPriceChanging = IsPriceChanging(order);
+            var bestBidPrice = _orderStore.BestBid;
+            var bestAskPrice = _orderStore.BestAsk;
+
+            // Accept bid (buy) and ask (sell) orders of a specified quantity and price for 1 stock
             var tradingOrder = TradingOrder.New(order);
             _orderStore.Add(tradingOrder);
             onSuccess?.Invoke();
+
+            // Publishes an event when an order has been accepted (not necessarily matched)
             NotifyOrderPlaced(order);
-            if (isPriceChanging)
+
+            // Find if any matched, Publishes an event when a bid order has been settled with a matching ask order, partially or otherwise
+            ResolveMatching(tradingOrder);
+
+            // Publishes an event when the best bid and ask price changes
+            if (IsPriceChanging(bestBidPrice, bestAskPrice))
             {
                 NotifyPriceChanged();
             }
-
-            ResolveMatching(tradingOrder);
         }
 
         private void ResolveMatching(TradingOrder tradingOrder)
@@ -122,16 +119,21 @@ namespace TradingEngine
         }
         private void ResolveBidMatching(TradingOrder tradingOrder)
         {
-            var matchingAsks = _orderStore.Asks.Where(a => a.Price <= tradingOrder.Price);
+            var matchingAsks = _orderStore
+                .Asks
+                .Where(a => a.Price <= tradingOrder.Price)
+                .OrderBy(_ => _.Price)
+                .ToList(); // best price comes first
+
             foreach (var matchingAsk in matchingAsks)
             {
-                if (tradingOrder.SharedUnits == 0)
+                if (tradingOrder.FullFilled)
                 {
                     break;
                 }
-                var shareToTrade = Math.Min(tradingOrder.SharedUnits, matchingAsk.SharedUnits);
-                matchingAsk.SharedUnits -= shareToTrade;
-                tradingOrder.SharedUnits -= shareToTrade;
+                var shareToTrade = Math.Min(tradingOrder.TradableUnits, matchingAsk.TradableUnits);
+                matchingAsk.TradableUnits -= shareToTrade;
+                tradingOrder.TradableUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
                     Price = tradingOrder.Price,
@@ -145,16 +147,20 @@ namespace TradingEngine
         }
         private void ResolveAskMatching(TradingOrder tradingOrder)
         {
-            var matchingBids = _orderStore.Bids.Where(a => a.Price >= tradingOrder.Price);
+            var matchingBids = _orderStore
+                .Bids
+                .Where(a => a.Price >= tradingOrder.Price)
+                .OrderByDescending(_ => _.Price); // best price comes first
+
             foreach (var matchingBid in matchingBids)
             {
-                if (tradingOrder.SharedUnits == 0)
+                if (tradingOrder.FullFilled)
                 {
                     break;
                 }
-                var shareToTrade = Math.Min(tradingOrder.SharedUnits, matchingBid.SharedUnits);
-                matchingBid.SharedUnits -= shareToTrade;
-                tradingOrder.SharedUnits -= shareToTrade;
+                var shareToTrade = Math.Min(tradingOrder.TradableUnits, matchingBid.TradableUnits);
+                matchingBid.TradableUnits -= shareToTrade;
+                tradingOrder.TradableUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
                     Price = tradingOrder.Price,
@@ -264,14 +270,10 @@ namespace TradingEngine
                 });
             }
         }
-        private bool IsPriceChanging(Order order)
+        private bool IsPriceChanging(decimal? oldBestBidPrice, decimal? oldBestAskPrice)
         {
-            if (order.IsBid)
-            {
-                return _orderStore.BestBid != order.Price;
-            }
-
-            return _orderStore.BestAsk != order.Price;
+            return _orderStore.BestBid != oldBestBidPrice ||
+                _orderStore.BestAsk != oldBestAskPrice;
         }
 
         private void NotifyPriceChanged() => Notify(new PriceChanged
@@ -286,13 +288,27 @@ namespace TradingEngine
         });
         private static void NotifyTradeSettled(TradeSettled trade) => Notify(trade);
 
-        private static OrderValidationResult ValidateOrder(Order order)
+        private OrderValidationResult ValidateOrder(Order order)
         {
+            if (_halted)
+            {
+                return new OrderValidationResult
+                {
+                    Reason = $"The Engine is halted for Stock: {_stockId}"
+                };
+            }
+            if (order.StockId != _stockId)
+            {
+                return new OrderValidationResult
+                {
+                    Reason = "StockId doesn't match"
+                };
+            }
             if (order.Price <= 0 || order.Units <= 0)
             {
                 return new OrderValidationResult
                 {
-                    Reason = $"{order.Units} units with price of {order.Price} is not valid"
+                    Reason = $"Ordering {order.Units} units with price of {order.Price} for {order.StockId} is not valid."
                 };
             }
 

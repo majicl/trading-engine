@@ -240,6 +240,45 @@ namespace TradingEngine
             Assert.Equal(99.99m, priceChanged.Bid);
         }
 
+        [Fact]
+        [Description("Price changes is based on the available share price")]
+        public void Making_Trades_Affect_Best_Prices()
+        {
+            //arrange
+            var bid = NewBid(units: 10, price: 99.98m);
+            PriceChanged priceChanged = null;
+            SetupSubscribe<PriceChanged>((pc) => priceChanged = pc);
+
+            //act
+            _matcher.Tell(bid);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.NotNull(priceChanged);
+            Assert.Equal(99.98m, priceChanged.Bid);
+
+            //arrange
+            var bid2 = NewBid(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(bid2);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.99m, priceChanged.Bid);
+
+            //arrange
+            var ask = NewAsk(units: 10, price: 99.99m);
+
+            //act
+            _matcher.Tell(ask);
+            Thread.Sleep(500);
+
+            //assert
+            Assert.Equal(99.98m, priceChanged.Bid);
+            Assert.Null(priceChanged.Ask);
+        }
+
         [Theory]
         [InlineData(99.99)] // max is 99.99
         [InlineData(99.98)]

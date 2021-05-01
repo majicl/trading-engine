@@ -6,12 +6,12 @@
         public TradingOrder(Order order)
         {
             Order = order;
-            SharedUnits = order.Units;
+            TradableUnits = order.Units;
         }
 
         public Order Order { get; set; }
-        public int SharedUnits { get; set; }
-        public bool IsSoldOut => SharedUnits <= 0;
+        public int TradableUnits { get; set; }
+        public bool FullFilled => TradableUnits <= 0;
         public decimal Price => Order.Price;
         public bool IsBid => Order.IsBid;
         public string OrderId => Order.OrderId;
