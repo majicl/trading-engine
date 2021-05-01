@@ -511,6 +511,54 @@ namespace TradingEngine
         }
 
         [Fact]
+        [Description("Trades Creation Is Based On Best Price")]
+        public async Task Order_Bid_Trades_Creation_Is_Based_On_Best_Price()
+        {
+            //arrange
+            var ask = NewAsk(units: 10, price: 109.01m);
+            var ask2 = NewAsk(units: 5, price: 109.00m);
+            var bid = NewBid(units: 10, price: 109.01m);
+            //act
+            _matcher.Tell(ask);
+            _matcher.Tell(ask2);
+            _matcher.Tell(bid);
+            var message = new GetTrades() { StockId = StockId };
+            var result = await _matcher.Ask<GetTradesResult>(message);
+
+            //assert
+            Assert.NotEmpty(result.Orders);
+            Assert.Equal(4, result.Orders.Count);
+            Assert.Equal(ask2.Order, result.Orders.First());
+            Assert.Equal(bid.Order, result.Orders[1]);
+            Assert.Equal(ask.Order, result.Orders[2]);
+            Assert.Equal(bid.Order, result.Orders.Last());
+        }
+
+        [Fact]
+        [Description("Trades Creation Is Based On Best Price")]
+        public async Task Order_Ask_Trades_Creation_Is_Based_On_Best_Price()
+        {
+            //arrange
+            var bid = NewBid(units: 5, price: 109.01m);
+            var bid2 = NewBid(units: 10, price: 109.00m);
+            var ask = NewAsk(units: 10, price: 109.00m);
+            //act
+            _matcher.Tell(bid2);
+            _matcher.Tell(bid);
+            _matcher.Tell(ask);
+            var message = new GetTrades() { StockId = StockId };
+            var result = await _matcher.Ask<GetTradesResult>(message);
+
+            //assert
+            Assert.NotEmpty(result.Orders);
+            Assert.Equal(4, result.Orders.Count);
+            Assert.Equal(ask.Order, result.Orders.First());
+            Assert.Equal(bid.Order, result.Orders[1]);
+            Assert.Equal(ask.Order, result.Orders[2]);
+            Assert.Equal(bid2.Order, result.Orders.Last());
+        }
+
+        [Fact]
         [Description("Doesn't return the set of settled orders with wrong stockId")]
         public async Task Set_Of_Settled_Orders_Does_NOT_Return_ExpectedData()
         {
