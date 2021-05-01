@@ -17,3 +17,4 @@
 - Ask orders can be settled with one or more than one matching bid order(s)
 - The priority for finding matches is the best price => price comes first even order has to match with more than one.
 - Partially filled order happens even when the number of asking units is more than all the available orders units. e.g. we have 3 asks with 10 units for each, in total 30 units are available. if we receive a bid of 40 units. a trade will be made for all 30 units and 10 will be waiting for upcoming asks.
+- When the engine is halted, it's still possible to GetPrice and GetTrades. it just makes engine read-only!
