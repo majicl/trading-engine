@@ -39,6 +39,21 @@ namespace TradingEngine
         }
 
         [Fact]
+        [Description("Doesn't accept orders with wrong stockId")]
+        public void Valid_Ask_With_Wrong_StockID_Order_Should_NOT_Place()
+        {
+            //arrange
+            var ask = Ask.New(NewId(), "Wrong", units: 4, price: 100);
+
+            //act
+            _matcher.Tell(ask);
+
+            //assert
+            var askResult = ExpectMsg<AskResult>(r => Assert.False(r.Success, r.Reason));
+            Assert.Equal("StockId doesn't match", askResult.Reason);
+        }
+
+        [Fact]
         [Description("Accept bid (buy) orders of a specified quantity and price for 1 stock")]
         public void Valid_Bid_Order_Should_Place()
         {
@@ -147,7 +162,8 @@ namespace TradingEngine
 
             //assert
             ExpectMsg<HaltResult>(r => Assert.True(r.Success, r.Reason));
-            ExpectNoMsg();
+            var askResult = ExpectMsg<AskResult>(r => Assert.False(r.Success, r.Reason));
+            Assert.Equal($"The Engine is halted for Stock: {StockId}", askResult.Reason);
         }
 
         [Fact]
@@ -163,7 +179,8 @@ namespace TradingEngine
 
             //assert
             ExpectMsg<HaltResult>();
-            ExpectNoMsg();
+            var askResult = ExpectMsg<AskResult>(r => Assert.False(r.Success, r.Reason));
+            Assert.Equal($"The Engine is halted for Stock: {StockId}", askResult.Reason);
 
             //arrange
             _matcher.Tell(new Start() { StockId = StockId });
@@ -326,7 +343,7 @@ namespace TradingEngine
             _matcher.Tell(bid);
             _matcher.Tell(ask);
 
-            var message = new GetPrice();
+            var message = new GetPrice() { StockId = StockId };
             var result = await _matcher.Ask<GetPriceResult>(message);
 
             //assert
@@ -352,7 +369,7 @@ namespace TradingEngine
             _matcher.Tell(bid);
             _matcher.Tell(ask);
 
-            var message = new GetPrice();
+            var message = new GetPrice() { StockId = StockId };
             var result = await _matcher.Ask<GetPriceResult>(message);
 
             //assert

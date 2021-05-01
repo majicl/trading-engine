@@ -32,8 +32,8 @@ namespace TradingEngine
                     HandleAskOrder(ask);
                     break;
 
-                case GetPrice:
-                    HandleGetPrice();
+                case GetPrice getPrice:
+                    HandleGetPrice(getPrice);
                     break;
 
                 case Start start:
@@ -78,8 +78,14 @@ namespace TradingEngine
             });
         private void HandlerOrder(Order order, Action onSuccess, Action<string> onFailure)
         {
+            if (order.StockId != _stockId)
+            {
+                onFailure?.Invoke("StockId doesn't match");
+                return;
+            }
             if (_halted)
             {
+                onFailure?.Invoke($"The Engine is halted for Stock: {_stockId}");
                 return;
             }
 
@@ -212,8 +218,17 @@ namespace TradingEngine
             }
         }
 
-        private void HandleGetPrice()
+        private void HandleGetPrice(GetPrice query)
         {
+            if (query.StockId != _stockId)
+            {
+                Sender.Tell(new GetPriceResult
+                {
+                    Reason = "StockId doesn't match"
+                });
+                return;
+            }
+
             if (_orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue)
             {
                 Sender.Tell(new GetPriceResult
