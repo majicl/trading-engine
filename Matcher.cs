@@ -159,7 +159,6 @@ namespace TradingEngine
                 _tradeSettled.Add(trade);
             });
         }
-
         private static void ResolveMatching(TradingOrder tradingOrder, IEnumerable<TradingOrder> matchingOrders, Action<TradingOrder, int> onFound)
         {
             foreach (var matchingBid in matchingOrders)
@@ -174,6 +173,7 @@ namespace TradingEngine
                 onFound?.Invoke(matchingBid, shareToTrade);
             }
         }
+        
         private void TurnOn(Start start)
         {
             if (start.StockId == _stockId)
@@ -271,6 +271,7 @@ namespace TradingEngine
                 });
             }
         }
+
         private bool IsPriceChanging(decimal? oldBestBidPrice, decimal? oldBestAskPrice)
         {
             return _orderStore.BestBid != oldBestBidPrice ||
