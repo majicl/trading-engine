@@ -296,8 +296,8 @@ namespace TradingEngine
         public async Task Latest_Price_Returns_ExpectedData()
         {
             //arrange
-            var bid = NewBid(units: 10, price: 110.00m);
-            var ask = NewAsk(units: 10, price: 100.00m);
+            var bid = NewBid(units: 10, price: 100.00m);
+            var ask = NewAsk(units: 10, price: 110.00m);
 
             //act
             _matcher.Tell(bid);
@@ -307,8 +307,8 @@ namespace TradingEngine
             var result = await _matcher.Ask<GetPriceResult>(message);
 
             //assert
-            Assert.Equal(110.00m, result.Bid);
-            Assert.Equal(100.00m, result.Ask);
+            Assert.Equal(100.00m, result.Bid);
+            Assert.Equal(110.00m, result.Ask);
             Assert.True(result.Success);
             Assert.Null(result.Reason);
         }
@@ -352,7 +352,7 @@ namespace TradingEngine
             //act
             _matcher.Tell(bid);
             _matcher.Tell(ask);
-            Thread.Sleep(500);
+            Thread.Sleep(2000);
 
             //assert
             Assert.NotNull(tradeSettled);

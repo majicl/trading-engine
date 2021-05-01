@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using Akka.Actor;
 
@@ -10,14 +12,14 @@ namespace TradingEngine
         private readonly string _stockId;
         private bool _halted = false;
         private readonly OrderStore _orderStore = new OrderStore();
-        private readonly ICollection<TradeSettled> _tradeSettled = new List<TradeSettled>();
+        private readonly ObservableCollection<TradeSettled> _tradeSettled = new ObservableCollection<TradeSettled>();
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
         public Matcher(string stockId)
         {
             _stockId = stockId;
+            _tradeSettled.CollectionChanged += _tradeSettled_Changed;
         }
-
         protected override void OnReceive(object message)
         {
             switch (message)
@@ -96,6 +98,58 @@ namespace TradingEngine
             {
                 NotifyPriceChanged();
             }
+
+            ResolveMatching(order);
+        }
+
+        private void ResolveMatching(Order order)
+        {
+            if (order.IsBid)
+            {
+                ResolveBidMatching(order);
+            }
+            else
+            {
+                ResolveAskMatching(order);
+            }
+        }
+        private void ResolveBidMatching(Order order)
+        {
+            var matchingAsks = _orderStore.Asks.Where(a => a.Price <= order.Price);
+            foreach (var matchingAsk in matchingAsks)
+            {
+                var shareToTrade = Math.Min(order.Units, matchingAsk.Units);
+                matchingAsk.Units -= shareToTrade;
+                order.Units -= shareToTrade;
+                var trade = new TradeSettled
+                {
+                    Price = order.Price,
+                    Units = shareToTrade,
+                    AskOrderId = matchingAsk.OrderId,
+                    StockId = _stockId,
+                    BidOrderId = order.OrderId
+                };
+                _tradeSettled.Add(trade);
+            }
+        }
+        private void ResolveAskMatching(Order order)
+        {
+            var matchingBids = _orderStore.Bids.Where(a => a.Price >= order.Price);
+            foreach (var matchingBid in matchingBids)
+            {
+                var shareToTrade = Math.Min(order.Units, matchingBid.Units);
+                matchingBid.Units -= shareToTrade;
+                order.Units -= shareToTrade;
+                var trade = new TradeSettled
+                {
+                    Price = order.Price,
+                    Units = shareToTrade,
+                    AskOrderId = order.OrderId,
+                    StockId = _stockId,
+                    BidOrderId = matchingBid.OrderId
+                };
+                _tradeSettled.Add(trade);
+            }
         }
 
         private void TurnOn()
@@ -107,7 +161,6 @@ namespace TradingEngine
             });
             _halted = false;
         }
-
         private void TurnOff()
         {
             Sender.Tell(new HaltResult()
@@ -130,11 +183,18 @@ namespace TradingEngine
                 }).ToList()
             });
         }
+        private static void _tradeSettled_Changed(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action != NotifyCollectionChangedAction.Add) return;
+            foreach (var newTradeSettled in e.NewItems)
+            {
+                NotifyTradeSettled(newTradeSettled as TradeSettled);
+            }
+        }
 
-        public bool Tradable => _orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue;
         private void HandleGetPrice()
         {
-            if (Tradable)
+            if (_orderStore.BestAsk.HasValue && _orderStore.BestBid.HasValue)
             {
                 Sender.Tell(new GetPriceResult
                 {
@@ -151,7 +211,6 @@ namespace TradingEngine
                 });
             }
         }
-
         private bool IsPriceChanging(Order order)
         {
             if (order.IsBid)
@@ -172,6 +231,7 @@ namespace TradingEngine
         {
             Order = order
         });
+        private static void NotifyTradeSettled(TradeSettled trade) => Notify(trade);
 
         private static OrderValidationResult ValidateOrder(Order order)
         {
