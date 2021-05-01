@@ -124,6 +124,10 @@ namespace TradingEngine
             var matchingAsks = _orderStore.Asks.Where(a => a.Price <= order.Price);
             foreach (var matchingAsk in matchingAsks)
             {
+                if (order.Units == 0)
+                {
+                    break;
+                }
                 var shareToTrade = Math.Min(order.Units, matchingAsk.Units);
                 matchingAsk.Units -= shareToTrade;
                 order.Units -= shareToTrade;
