@@ -1,3 +1,6 @@
+
+![build](https://github.com/majicl/trading-engine/actions/workflows/dotnet-core.yml/badge.svg)
+
 # Trading engine:
 
 ## Available Functionalities:
