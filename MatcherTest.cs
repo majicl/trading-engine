@@ -424,6 +424,25 @@ namespace TradingEngine
         }
 
         [Fact]
+        [Description("Order history should be available after matchings")]
+        public async Task Orders_History_Should_Be_Available_After_Matching()
+        {
+            //arrange
+            var ask = NewAsk(units: 10, price: 99.99m);
+            var bid = NewBid(units: 4, price: 99.99m);
+
+            //act
+            _matcher.Tell(ask);
+            _matcher.Tell(bid);
+            var message = new GetTrades() { StockId = StockId };
+            var result = await _matcher.Ask<GetTradesResult>(message);
+
+            //assert
+            Assert.Equal(2, result.Orders.Count);
+            Assert.Equal(10, ask.Order.Units);
+        }
+
+        [Fact]
         [Description("Returns the set of settled orders (some orders may appear multiple times if they are filled by multiple orders)")]
         public async Task Set_Of_Settled_Orders_Returns_ExpectedData()
         {
