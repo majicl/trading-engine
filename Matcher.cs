@@ -125,15 +125,8 @@ namespace TradingEngine
                 .OrderBy(_ => _.Price)
                 .ToList(); // best price comes first
 
-            foreach (var matchingAsk in matchingAsks)
+            ResolveMatching(tradingOrder, matchingAsks, (matchingAsk, shareToTrade) =>
             {
-                if (tradingOrder.FullFilled)
-                {
-                    break;
-                }
-                var shareToTrade = Math.Min(tradingOrder.TradableUnits, matchingAsk.TradableUnits);
-                matchingAsk.TradableUnits -= shareToTrade;
-                tradingOrder.TradableUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
                     Price = tradingOrder.Price,
@@ -143,24 +136,18 @@ namespace TradingEngine
                     BidOrderId = tradingOrder.OrderId
                 };
                 _tradeSettled.Add(trade);
-            }
+            });
         }
         private void ResolveAskMatching(TradingOrder tradingOrder)
         {
             var matchingBids = _orderStore
                 .Bids
                 .Where(a => a.Price >= tradingOrder.Price)
-                .OrderByDescending(_ => _.Price); // best price comes first
+                .OrderByDescending(_ => _.Price) // best price comes first
+                .ToList();
 
-            foreach (var matchingBid in matchingBids)
+            ResolveMatching(tradingOrder, matchingBids, (matchingBid, shareToTrade) =>
             {
-                if (tradingOrder.FullFilled)
-                {
-                    break;
-                }
-                var shareToTrade = Math.Min(tradingOrder.TradableUnits, matchingBid.TradableUnits);
-                matchingBid.TradableUnits -= shareToTrade;
-                tradingOrder.TradableUnits -= shareToTrade;
                 var trade = new TradeSettled
                 {
                     Price = tradingOrder.Price,
@@ -170,9 +157,23 @@ namespace TradingEngine
                     BidOrderId = matchingBid.OrderId
                 };
                 _tradeSettled.Add(trade);
-            }
+            });
         }
 
+        private static void ResolveMatching(TradingOrder tradingOrder, IEnumerable<TradingOrder> matchingOrders, Action<TradingOrder, int> onFound)
+        {
+            foreach (var matchingBid in matchingOrders)
+            {
+                if (tradingOrder.FullFilled)
+                {
+                    break;
+                }
+                var shareToTrade = Math.Min(tradingOrder.TradableUnits, matchingBid.TradableUnits);
+                matchingBid.TradableUnits -= shareToTrade;
+                tradingOrder.TradableUnits -= shareToTrade;
+                onFound?.Invoke(matchingBid, shareToTrade);
+            }
+        }
         private void TurnOn(Start start)
         {
             if (start.StockId == _stockId)
