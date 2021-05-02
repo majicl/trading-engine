@@ -20,3 +20,8 @@
 - When the engine is halted, it's still possible to GetPrice and GetTrades. it just makes it read-only!
 - When the engine is already halted and you try to halt it again. it does it. another possibility was to return Unsuccess with a reason.
 - When the engine is already started and you try to start it again. it does it. another possibility was to return Unsuccess with a reason.
+- Checking for changing the best price and publishing the `PriceChanged` event happens after the trade settling process. it could be right after accepting a bid or ask. or even twice
+
+## Issues
+There are some issues in the Program file. I've not changed it as you mentioned. but you can see them here:
+https://github.com/majicl/trading-engine/issues
