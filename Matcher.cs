@@ -52,6 +52,7 @@ namespace TradingEngine
         }
         private void Shared()
         {
+            // should be a way to exclude behaviours during switching  
             Receive<GetPrice>(HandleGetPrice);
             Receive<Start>(TurnOn);
             Receive<Halt>(TurnOff);
