@@ -11,11 +11,16 @@ namespace TradingEngine
     public class Matcher : ReceiveActor
     {
         private readonly string _stockId;
-        private bool _halted = false;
         private readonly OrderStore _orderStore = new OrderStore();
         private readonly ObservableCollection<TradeSettled> _tradeSettled = new ObservableCollection<TradeSettled>();
         public ILoggingAdapter Log { get; } = Context.GetLogger();
-        protected override void PreStart() => Log.Info("Engine started");
+        protected override void PreStart()
+        {
+            base.PreStart();
+            Log.Info("Engine started");
+            Become(Open);
+        }
+
         protected override void PostStop() => Log.Info("Engine stopped");
 
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
@@ -24,9 +29,29 @@ namespace TradingEngine
         {
             _stockId = stockId;
             _tradeSettled.CollectionChanged += _tradeSettled_Changed;
+        }
 
+        private void Open()
+        {
+            Shared();
             Receive<Bid>(HandleBidOrder);
             Receive<Ask>(HandleAskOrder);
+        }
+        private void Close()
+        {
+            Shared();
+            var reason = $"The Engine is halted for Stock: {_stockId}";
+            Receive<Bid>(msg => Sender.Tell(new BidResult
+            {
+                Reason = reason
+            }));
+            Receive<Ask>(msg => Sender.Tell(new AskResult
+            {
+                Reason = reason
+            }));
+        }
+        private void Shared()
+        {
             Receive<GetPrice>(HandleGetPrice);
             Receive<Start>(TurnOn);
             Receive<Halt>(TurnOff);
@@ -165,7 +190,7 @@ namespace TradingEngine
                 {
                     Success = true
                 });
-                _halted = false;
+                Become(Open);
             }
             else
             {
@@ -184,7 +209,7 @@ namespace TradingEngine
                 {
                     Success = true
                 });
-                _halted = true;
+                Become(Close);
             }
             else
             {
@@ -275,13 +300,6 @@ namespace TradingEngine
 
         private OrderValidationResult ValidateOrder(Order order)
         {
-            if (_halted)
-            {
-                return new OrderValidationResult
-                {
-                    Reason = $"The Engine is halted for Stock: {_stockId}"
-                };
-            }
             if (order.StockId != _stockId)
             {
                 return new OrderValidationResult
