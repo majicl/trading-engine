@@ -4,50 +4,33 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using Akka.Actor;
+using Akka.Event;
 
 namespace TradingEngine
 {
-    public class Matcher : UntypedActor
+    public class Matcher : ReceiveActor
     {
         private readonly string _stockId;
         private bool _halted = false;
         private readonly OrderStore _orderStore = new OrderStore();
         private readonly ObservableCollection<TradeSettled> _tradeSettled = new ObservableCollection<TradeSettled>();
+        public ILoggingAdapter Log { get; } = Context.GetLogger();
+        protected override void PreStart() => Log.Info("Engine started");
+        protected override void PostStop() => Log.Info("Engine stopped");
+
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
         public Matcher(string stockId)
         {
             _stockId = stockId;
             _tradeSettled.CollectionChanged += _tradeSettled_Changed;
-        }
-        protected override void OnReceive(object message)
-        {
-            switch (message)
-            {
-                case Bid bid:
-                    HandleBidOrder(bid);
-                    break;
 
-                case Ask ask:
-                    HandleAskOrder(ask);
-                    break;
-
-                case GetPrice getPrice:
-                    HandleGetPrice(getPrice);
-                    break;
-
-                case Start start:
-                    TurnOn(start);
-                    break;
-
-                case Halt halt:
-                    TurnOff(halt);
-                    break;
-
-                case GetTrades getTrades:
-                    HandleGetTrades(getTrades);
-                    break;
-            }
+            Receive<Bid>(HandleBidOrder);
+            Receive<Ask>(HandleAskOrder);
+            Receive<GetPrice>(HandleGetPrice);
+            Receive<Start>(TurnOn);
+            Receive<Halt>(TurnOff);
+            Receive<GetTrades>(HandleGetTrades);
         }
 
         private void HandleAskOrder(Ask ask) => HandlerOrder(ask.Order, () =>
@@ -173,7 +156,7 @@ namespace TradingEngine
                 onFound?.Invoke(matchingBid, shareToTrade);
             }
         }
-        
+
         private void TurnOn(Start start)
         {
             if (start.StockId == _stockId)
