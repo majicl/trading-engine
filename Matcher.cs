@@ -4,15 +4,25 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using Akka.Actor;
+using Akka.Event;
 
 namespace TradingEngine
 {
-    public class Matcher : UntypedActor
+    public class Matcher : ReceiveActor
     {
         private readonly string _stockId;
-        private bool _halted = false;
         private readonly OrderStore _orderStore = new OrderStore();
         private readonly ObservableCollection<TradeSettled> _tradeSettled = new ObservableCollection<TradeSettled>();
+        public ILoggingAdapter Log { get; } = Context.GetLogger();
+        protected override void PreStart()
+        {
+            base.PreStart();
+            Log.Info("Engine started");
+            Become(Open);
+        }
+
+        protected override void PostStop() => Log.Info("Engine stopped");
+
         private static void Notify(object @event) => Context.System.EventStream.Publish(@event);
 
         public Matcher(string stockId)
@@ -20,34 +30,33 @@ namespace TradingEngine
             _stockId = stockId;
             _tradeSettled.CollectionChanged += _tradeSettled_Changed;
         }
-        protected override void OnReceive(object message)
+
+        private void Open()
         {
-            switch (message)
+            Shared();
+            Receive<Bid>(HandleBidOrder);
+            Receive<Ask>(HandleAskOrder);
+        }
+        private void Close()
+        {
+            Shared();
+            var reason = $"The Engine is halted for Stock: {_stockId}";
+            Receive<Bid>(msg => Sender.Tell(new BidResult
             {
-                case Bid bid:
-                    HandleBidOrder(bid);
-                    break;
-
-                case Ask ask:
-                    HandleAskOrder(ask);
-                    break;
-
-                case GetPrice getPrice:
-                    HandleGetPrice(getPrice);
-                    break;
-
-                case Start start:
-                    TurnOn(start);
-                    break;
-
-                case Halt halt:
-                    TurnOff(halt);
-                    break;
-
-                case GetTrades getTrades:
-                    HandleGetTrades(getTrades);
-                    break;
-            }
+                Reason = reason
+            }));
+            Receive<Ask>(msg => Sender.Tell(new AskResult
+            {
+                Reason = reason
+            }));
+        }
+        private void Shared()
+        {
+            // should be a way to exclude behaviours during switching  
+            Receive<GetPrice>(HandleGetPrice);
+            Receive<Start>(TurnOn);
+            Receive<Halt>(TurnOff);
+            Receive<GetTrades>(HandleGetTrades);
         }
 
         private void HandleAskOrder(Ask ask) => HandlerOrder(ask.Order, () =>
@@ -173,7 +182,7 @@ namespace TradingEngine
                 onFound?.Invoke(matchingBid, shareToTrade);
             }
         }
-        
+
         private void TurnOn(Start start)
         {
             if (start.StockId == _stockId)
@@ -182,7 +191,7 @@ namespace TradingEngine
                 {
                     Success = true
                 });
-                _halted = false;
+                Become(Open);
             }
             else
             {
@@ -201,7 +210,7 @@ namespace TradingEngine
                 {
                     Success = true
                 });
-                _halted = true;
+                Become(Close);
             }
             else
             {
@@ -292,13 +301,6 @@ namespace TradingEngine
 
         private OrderValidationResult ValidateOrder(Order order)
         {
-            if (_halted)
-            {
-                return new OrderValidationResult
-                {
-                    Reason = $"The Engine is halted for Stock: {_stockId}"
-                };
-            }
             if (order.StockId != _stockId)
             {
                 return new OrderValidationResult
